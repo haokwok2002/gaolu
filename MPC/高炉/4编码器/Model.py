@@ -8,13 +8,13 @@ from Module import Attn
 
 BATCH = 300
 EPOCHS = 40
-INPUT_SIZE = 6
+INPUT_SIZE = 9
 LR = 0.01
 d_model = 512
 heads = 8
 HIDDEN_SIZE = 32
 h_state = None
-TIME_STEP = 12
+TIME_STEP = 1
 STEPS = 1
 DEVICE = torch.device('cuda' if cuda.is_available() else 'cpu')
 
