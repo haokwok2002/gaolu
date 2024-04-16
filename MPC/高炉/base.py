@@ -25,42 +25,42 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-def replace_outliers_with_weighted_diff(df, input_term, output_term, time_term):
-    # 创建数据框副本以避免修改原始数据
-    df_process = df.copy()
 
-    # 定义一个函数，用前后两个值的差值按照距离进行加权替换异常值
-    def replace_outliers_with_weighted_diff_series(x, y):
-        # 计算列的中位数
-        median_value = y.median()
-        # 检测异常值的索引
-        outliers_index = (y - median_value).abs() > 1.5 * y.std()  # 使用标准差作为阈值
 
-        # 遍历异常值的索引
-        for idx in outliers_index[outliers_index].index:
-            # 获取异常值前一个和后一个值的索引
-            prev_idx = idx - 1 if idx - 1 >= 0 else idx
-            next_idx = idx + 1 if idx + 1 < len(y) else idx
-            # 计算当前 x 与前后两个 x 的距离
-            dist_prev = abs(x[idx] - x[prev_idx])
-            dist_next = abs(x[next_idx] - x[idx])
-            total_dist = dist_prev + dist_next
-            # 计算权重
-            weight_prev = dist_next / total_dist
-            weight_next = dist_prev / total_dist
-            # 计算前后两个值的差值
-            diff = y[next_idx] - y[prev_idx]
-            # 根据权重进行插值
-            interpolated_value = y[prev_idx] + weight_prev * diff
-            # 用插值结果替代异常值
-            y[idx] = interpolated_value
-
-    # 对指定列应用替代异常值的函数
-    for column in input_term + output_term:
-        replace_outliers_with_weighted_diff_series(df_process['时间戳'], df_process[column])
-
+# 定义一个函数，用前后两个值的差值按照距离进行加权替换异常值
+def replace_outliers_with_weighted_diff(x, y):
+    # 计算列的中位数
+    median_value = y.median()
+    # 检测异常值的索引
+    outliers_index = (y - median_value).abs() > 1.5 * y.std()  # 使用标准差作为阈值
     
-    return df_process
+    # 遍历异常值的索引
+    for idx in outliers_index[outliers_index].index:
+        # 获取异常值前一个和后一个值的索引
+        prev_idx = idx - 1 if idx - 1 >= 0 else idx
+        next_idx = idx + 1 if idx + 1 < len(y) else idx
+        # 计算当前 x 与前后两个 x 的距离
+        dist_prev = abs(x[idx] - x[prev_idx])
+        dist_next = abs(x[next_idx] - x[idx])
+        total_dist = dist_prev + dist_next
+        # 计算权重
+        weight_prev = dist_next / total_dist
+        weight_next = dist_prev / total_dist
+        # 计算前后两个值的差值
+        diff = y[next_idx] - y[prev_idx]
+        # 根据权重进行插值
+        interpolated_value = y[prev_idx] + weight_prev * diff
+        # 用插值结果替代异常值
+        y[idx] = interpolated_value
+
+# 画出数据
+def plot_subplot(data_x,data_y_yuan,data_y,column):
+    plt.plot(data_x,data_y_yuan,'r-')
+    plt.plot(data_x,data_y,'m-')
+    # plt.xlabel(time_term, fontproperties=font)  # 使用中文标签
+    plt.ylabel(column, fontproperties=font)  # 使用中文标签
+    # 使用中文标签
+
 
 
 
@@ -164,6 +164,128 @@ class MyRNNModel(torch.nn.Module):
         return y_pred[:,0].detach().numpy(),y_pred[:,1].detach().numpy()
 
 
+
+def double_control_train_test_result(scalers,output_term,
+                                    y_test,y_pred_0,y_pred_1,
+                                    y_test_2,y_pred_0_2,y_pred_1_2):
+    y_test_0 = scalers[output_term[0]].inverse_transform((y_test[:, 0]).reshape(-1, 1)).flatten()
+    y_test_1 = scalers[output_term[1]].inverse_transform((y_test[:, 1]).reshape(-1, 1)).flatten()
+    y_pred_0_inverse_transform = scalers[output_term[0]].inverse_transform((y_pred_0).reshape(-1, 1)).flatten()
+    y_pred_1_inverse_transform = scalers[output_term[1]].inverse_transform((y_pred_1).reshape(-1, 1)).flatten()
+
+    rmse_0 = np.sqrt(mean_squared_error(y_test_0, y_pred_0_inverse_transform))
+    rmse_1 = np.sqrt(mean_squared_error(y_test_1, y_pred_1_inverse_transform))
+
+    # 计算 
+    mre_0 = np.mean(np.abs((y_test_0 - y_pred_0_inverse_transform) / y_test_0))
+    mre_1 = np.mean(np.abs((y_test_1 - y_pred_1_inverse_transform) / y_test_1))
+
+
+    mape_0 = np.mean(np.abs((y_test_0 - y_pred_0_inverse_transform) / y_test_0)) * 100
+    mape_1 = np.mean(np.abs((y_test_1 - y_pred_1_inverse_transform) / y_test_1)) * 100
+
+    percent0 = np.sum(np.fabs(y_test_0 - y_pred_0_inverse_transform) < 10)/len(y_test_0)
+    percent1 = np.sum(np.fabs(y_test_1 - y_pred_1_inverse_transform) < 0.1)/len(y_test_1)
+    # 打印结果
+
+    print('训练集')
+    print(f"RMSE:  {output_term[0]}: {rmse_0:.4f} , {output_term[1]}: {rmse_1:.4f} ")
+    print(f"MAPE:  {output_term[0]}: {mape_0:.4f}% , {output_term[1]}: {mape_1:.4f}%")
+    print(f"MRE :  {output_term[0]}: { mre_0:.4f}  , {output_term[1]}: { mre_1:.4f} ")
+    print(f"per :  {output_term[0]}: { percent0:.4f}  , {output_term[1]}: { percent1:.4f} ")
+
+    # plot_hit_rate_curve(y_test, y_pred_0, y_pred_1)
+
+
+    output0 = y_test_0 - y_pred_0_inverse_transform
+    output1 = y_test_1 - y_pred_1_inverse_transform
+
+    # print(f"误差分析0:平均值:{output0.std():.4f},方差:{output0.mean():.4f}")
+    # print(f"误差分析1:平均值:{output1.std():.4f},方差:{output1.mean():.4f}")
+
+    plt.figure(figsize=(14, 6))
+    plt.subplot(4, 2, 1)
+    plt.plot(y_test_0,'r')
+    plt.plot(y_pred_0_inverse_transform,'g')
+    plt.ylabel(output_term[0], fontproperties=font)  # 使用中文标签
+
+    plt.subplot(4, 2, 3)
+    plt.plot(y_test_1,'r')
+    plt.plot(y_pred_1_inverse_transform,'g')
+    plt.ylabel(output_term[1], fontproperties=font)  # 使用中文标签
+
+    plt.subplot(4, 2, 5)
+    plt.plot(output0,'r-')
+    plt.ylabel(output_term[0]+'_err', fontproperties=font)  # 使用中文标签
+
+    plt.subplot(4, 2, 7)
+    plt.plot(output1,'g-')
+    plt.ylabel(output_term[1]+'_err', fontproperties=font)  # 使用中文标签
+
+
+
+
+    y_test_0 = scalers[output_term[0]].inverse_transform((y_test_2[:, 0]).reshape(-1, 1)).flatten()
+    y_test_1 = scalers[output_term[1]].inverse_transform((y_test_2[:, 1]).reshape(-1, 1)).flatten()
+    y_pred_0_inverse_transform = scalers[output_term[0]].inverse_transform((y_pred_0_2).reshape(-1, 1)).flatten()
+    y_pred_1_inverse_transform = scalers[output_term[1]].inverse_transform((y_pred_1_2).reshape(-1, 1)).flatten()
+
+    rmse_0 = np.sqrt(mean_squared_error(y_test_0, y_pred_0_inverse_transform))
+    rmse_1 = np.sqrt(mean_squared_error(y_test_1, y_pred_1_inverse_transform))
+
+    # 计算 
+    mre_0 = np.mean(np.abs((y_test_0 - y_pred_0_inverse_transform) / y_test_0))
+    mre_1 = np.mean(np.abs((y_test_1 - y_pred_1_inverse_transform) / y_test_1))
+
+
+    mape_0 = np.mean(np.abs((y_test_0 - y_pred_0_inverse_transform) / y_test_0)) * 100
+    mape_1 = np.mean(np.abs((y_test_1 - y_pred_1_inverse_transform) / y_test_1)) * 100
+
+    percent0 = np.sum(np.fabs(y_test_0 - y_pred_0_inverse_transform) < 10)/len(y_test_0)
+    percent1 = np.sum(np.fabs(y_test_1 - y_pred_1_inverse_transform) < 0.1)/len(y_test_1)
+    # 打印结果
+    print('测试集')
+    print(f"RMSE:  {output_term[0]}: {rmse_0:.4f} , {output_term[1]}: {rmse_1:.4f} ")
+    print(f"MAPE:  {output_term[0]}: {mape_0:.4f}% , {output_term[1]}: {mape_1:.4f}%")
+    print(f"MRE :  {output_term[0]}: { mre_0:.4f}  , {output_term[1]}: { mre_1:.4f} ")
+    print(f"per :  {output_term[0]}: { percent0:.4f}  , {output_term[1]}: { percent1:.4f} ")
+
+    # plot_hit_rate_curve(y_test, y_pred_0, y_pred_1)
+
+
+    output0 = y_test_0 - y_pred_0_inverse_transform
+    output1 = y_test_1 - y_pred_1_inverse_transform
+
+    # print(f"误差分析0:平均值:{output0.std():.4f},方差:{output0.mean():.4f}")
+    # print(f"误差分析1:平均值:{output1.std():.4f},方差:{output1.mean():.4f}")
+
+    plt.subplot(4, 2, 2)
+    plt.plot(y_test_0,'r')
+    plt.plot(y_pred_0_inverse_transform,'g')
+    plt.ylabel(output_term[0], fontproperties=font)  # 使用中文标签
+
+    plt.subplot(4, 2, 4)
+    plt.plot(y_test_1,'r')
+    plt.plot(y_pred_1_inverse_transform,'g')
+    plt.ylabel(output_term[1], fontproperties=font)  # 使用中文标签
+
+    plt.subplot(4, 2, 6)
+    plt.plot(output0,'r-')
+    plt.ylabel(output_term[0]+'_err', fontproperties=font)  # 使用中文标签
+
+    plt.subplot(4, 2, 8)
+    plt.plot(output1,'g-')
+    plt.ylabel(output_term[1]+'_err', fontproperties=font)  # 使用中文标签
+
+
+
+    plt.tight_layout()
+    plt.show()
+
+
+
+
+
 def double_control_predict_result(scalers,output_term,y_test,y_pred_0,y_pred_1):
     y_test_0 = scalers[output_term[0]].inverse_transform((y_test[:, 0]).reshape(-1, 1)).flatten()
     y_test_1 = scalers[output_term[1]].inverse_transform((y_test[:, 1]).reshape(-1, 1)).flatten()
@@ -219,6 +341,48 @@ def double_control_predict_result(scalers,output_term,y_test,y_pred_0,y_pred_1):
 
     plt.tight_layout()
     plt.show()
+
+def single_control_predict_result(scalers,output_term,y_test,y_pred_0):
+    
+    y_test_0 = scalers[output_term[0]].inverse_transform((y_test.reshape(-1, 1))).flatten()
+    y_pred_0_inverse_transform = scalers[output_term[0]].inverse_transform((y_pred_0.reshape(-1, 1))).flatten()
+
+    rmse_0 = np.sqrt(mean_squared_error(y_test_0, y_pred_0_inverse_transform))
+
+    # 计算 
+    mre_0 = np.mean(np.abs((y_test_0 - y_pred_0_inverse_transform) / y_test_0))
+
+    # 打印结果
+    print(f"RMSE: {output_term[0]}: {rmse_0:.4f}")
+    print(f"MRE : {output_term[0]}: { mre_0:.4f}")
+    mape_0 = np.mean(np.abs((y_test_0 - y_pred_0_inverse_transform) / y_test_0)) * 100
+    print(f"MAPE: {output_term[0]}: {mape_0:.4f}%")
+
+
+
+    output0 = y_test_0 - y_pred_0_inverse_transform
+    MAE = np.mean(np.abs(output0))
+    RMSE = np.sqrt(MAE)
+    HR = np.sum(np.abs(output0)<0.1)/len(output0)
+    RE = np.sum(output0**2)/np.sum(y_test**2)
+    print(f'MAE:{MAE:.4f},RMSE:{RMSE:.4f},HR:{HR:.4f},RE:{RE:.4f}')
+
+    plt.figure(figsize=(8, 4))
+    plt.subplot(2, 1, 1)
+    plt.plot(y_test_0,'r')
+    plt.plot(y_pred_0_inverse_transform,'g')
+    plt.ylabel(output_term[0], fontproperties=font)  # 使用中文标签
+
+
+
+    plt.subplot(2, 1, 2)
+    plt.plot(output0,'r-')
+    plt.ylabel(output_term[0]+'_err', fontproperties=font)  # 使用中文标签
+    plt.suptitle('高炉模型预测结果', fontproperties=font)  # 添加整个图形的标题
+    plt.tight_layout()
+    plt.show()
+
+
 
 
 def gaolu_predict_raw(scalers,output_term,model,model_gaolu,X_predict_test,y_predict_test):
@@ -381,25 +545,34 @@ def generate_yr(aim_value,current_value,alpha,P):
     # plt.show()
     return y_r
 
-def data_tranform_plot(scalers,Times,max_control,
+def data_tranform_plot_7_2(scalers,Times,max_control,
                         output_term,input_term,
                         set_y1,set_y2,set_y1_trans,set_y2_trans,
                         all_pred_y1, all_pred_y2,
                         all_pred_u1,
                         all_pred_u2,
                         all_pred_u3,
-                        all_pred_u4):
+                        all_pred_u4,
+                        all_pred_u5,
+                        all_pred_u6,
+                        all_pred_u7):
     y1_pred_inverse_transform = scalers[output_term[0]].inverse_transform(np.array(all_pred_y1).reshape(-1, 1)).flatten()
     y2_pred_inverse_transform = scalers[output_term[1]].inverse_transform(np.array(all_pred_y2).reshape(-1, 1)).flatten()
     all_pred_u1_inverse_transform = scalers[input_term[0]].inverse_transform(np.array(all_pred_u1).reshape(-1, 1)).flatten()
     all_pred_u2_inverse_transform = scalers[input_term[1]].inverse_transform(np.array(all_pred_u2).reshape(-1, 1)).flatten()
     all_pred_u3_inverse_transform = scalers[input_term[2]].inverse_transform(np.array(all_pred_u3).reshape(-1, 1)).flatten()
     all_pred_u4_inverse_transform = scalers[input_term[3]].inverse_transform(np.array(all_pred_u4).reshape(-1, 1)).flatten()
+    all_pred_u5_inverse_transform = scalers[input_term[4]].inverse_transform(np.array(all_pred_u2).reshape(-1, 1)).flatten()
+    all_pred_u6_inverse_transform = scalers[input_term[5]].inverse_transform(np.array(all_pred_u3).reshape(-1, 1)).flatten()
+    all_pred_u7_inverse_transform = scalers[input_term[6]].inverse_transform(np.array(all_pred_u4).reshape(-1, 1)).flatten()
     a1 = scalers[input_term[0]].inverse_transform(np.array([1,-1]).reshape(-1, 1)).flatten()
     a2 = scalers[input_term[1]].inverse_transform(np.array([1,-1]).reshape(-1, 1)).flatten()
     a3 = scalers[input_term[2]].inverse_transform(np.array([1,-1]).reshape(-1, 1)).flatten()
     a4 = scalers[input_term[3]].inverse_transform(np.array([1,-1]).reshape(-1, 1)).flatten()
-    print(f'上线分别是：{a1}、{a2}、{a3}、{a4}')
+    a5 = scalers[input_term[4]].inverse_transform(np.array([1,-1]).reshape(-1, 1)).flatten()
+    a6 = scalers[input_term[5]].inverse_transform(np.array([1,-1]).reshape(-1, 1)).flatten()
+    a7 = scalers[input_term[6]].inverse_transform(np.array([1,-1]).reshape(-1, 1)).flatten()
+    print(f'上线分别是：{a1}、{a2}、{a3}、{a4}、{a5}、{a6}、{a7}')
 
 
     rmse_1 = np.mean(np.fabs(set_y1-y1_pred_inverse_transform))
@@ -474,7 +647,7 @@ def data_tranform_plot(scalers,Times,max_control,
 
     # 第二个维度的u2曲线
     plt.subplot(9, 2, 13)
-    plt.plot(all_pred_u2, 'bo-', label='u5')
+    plt.plot(all_pred_u5, 'bo-', label='u5')
     plt.axvline(x=0, color='gray', linestyle='--', linewidth=1.5)
     plt.xlim((0,Times))
     plt.ylim((-max_control,max_control))
@@ -484,7 +657,7 @@ def data_tranform_plot(scalers,Times,max_control,
 
     # 第三个维度的u3曲线
     plt.subplot(9, 2, 15)
-    plt.plot(all_pred_u3, 'bo-', label='u6')  # 修改标签为 'u3'
+    plt.plot(all_pred_u6, 'bo-', label='u6')  # 修改标签为 'u3'
     plt.axvline(x=0, color='gray', linestyle='--', linewidth=1.5)
     plt.xlim((0,Times))
     plt.ylim((-max_control,max_control))
@@ -494,7 +667,7 @@ def data_tranform_plot(scalers,Times,max_control,
 
     # 第四个维度的u4曲线
     plt.subplot(9, 2, 17)
-    plt.plot(all_pred_u4, 'bo-', label='u7')  # 修改标签为 'u4'
+    plt.plot(all_pred_u7, 'bo-', label='u7')  # 修改标签为 'u4'
     plt.axvline(x=0, color='gray', linestyle='--', linewidth=1.5)
     plt.xlim((0,Times))
     plt.ylim((-max_control,max_control))
@@ -528,6 +701,137 @@ def data_tranform_plot(scalers,Times,max_control,
 
     # 第一个维度的u1曲线
     plt.subplot(9, 2, 6)
+    plt.plot(all_pred_u1_inverse_transform, 'bo-', label='u1')
+    plt.axvline(x=0, color='gray', linestyle='--', linewidth=1.5)
+    plt.xlim((0,Times))
+    plt.ylim((a1[1],a1[0]))
+    plt.ylabel(input_term[0], fontproperties=font)  # 使用中文标签
+    plt.legend()
+    plt.grid(linestyle='--', alpha=0.7, color='gray')
+
+    # 第二个维度的u2曲线
+    plt.subplot(9, 2, 8)
+    plt.plot(all_pred_u2_inverse_transform, 'bo-', label='u2')
+    plt.axvline(x=0, color='gray', linestyle='--', linewidth=1.5)
+    plt.xlim((0,Times))
+    plt.ylim((a2[1],a2[0]))
+    plt.ylabel(input_term[1], fontproperties=font)  # 使用中文标签
+    plt.legend()
+    plt.grid(linestyle='--', alpha=0.7, color='gray')
+
+    # 第三个维度的u3曲线
+    plt.subplot(9, 2, 10)
+    plt.plot(all_pred_u3_inverse_transform, 'bo-', label='u3')  # 修改标签为 'u3'
+    plt.axvline(x=0, color='gray', linestyle='--', linewidth=1.5)
+    plt.xlim((0,Times))
+    plt.ylim((a3[1],a3[0]))
+    plt.ylabel(input_term[2], fontproperties=font)  # 使用中文标签
+    plt.legend()
+    plt.grid(linestyle='--', alpha=0.7, color='gray')
+
+    # 第四个维度的u4曲线
+    plt.subplot(9, 2, 12)
+    plt.plot(all_pred_u4_inverse_transform, 'bo-', label='u4')  # 修改标签为 'u4'
+    plt.axvline(x=0, color='gray', linestyle='--', linewidth=1.5)
+    plt.xlim((0,Times))
+    plt.ylim((a4[1],a4[0]))
+    plt.ylabel(input_term[3], fontproperties=font)  # 使用中文标签
+    plt.legend()
+    plt.grid(linestyle='--', alpha=0.7, color='gray')
+
+
+    # 第二个维度的u5曲线
+    plt.subplot(9, 2, 14)
+    plt.plot(all_pred_u5_inverse_transform, 'bo-', label='u2')
+    plt.axvline(x=0, color='gray', linestyle='--', linewidth=1.5)
+    plt.xlim((0,Times))
+    plt.ylim((a5[1],a5[0]))
+    plt.ylabel(input_term[4], fontproperties=font)  # 使用中文标签
+    plt.legend()
+    plt.grid(linestyle='--', alpha=0.7, color='gray')
+
+    # 第三个维度的u6曲线
+    plt.subplot(9, 2, 16)
+    plt.plot(all_pred_u6_inverse_transform, 'bo-', label='u3')  # 修改标签为 'u3'
+    plt.axvline(x=0, color='gray', linestyle='--', linewidth=1.5)
+    plt.xlim((0,Times))
+    plt.ylim((a6[1],a6[0]))
+    plt.ylabel(input_term[5], fontproperties=font)  # 使用中文标签
+    plt.legend()
+    plt.grid(linestyle='--', alpha=0.7, color='gray')
+
+    # 第四个维度的u7曲线
+    plt.subplot(9, 2, 18)
+    plt.plot(all_pred_u7_inverse_transform, 'bo-', label='u4')  # 修改标签为 'u4'
+    plt.axvline(x=0, color='gray', linestyle='--', linewidth=1.5)
+    plt.xlim((0,Times))
+    plt.ylim((a7[1],a7[0]))
+    plt.ylabel(input_term[6], fontproperties=font)  # 使用中文标签
+    plt.legend()
+    plt.grid(linestyle='--', alpha=0.7, color='gray')
+
+
+    # 调整子图布局
+    plt.tight_layout()
+    plt.show()
+
+
+
+
+
+
+def data_tranform_plot_4_2(scalers,Times,max_control,
+                        output_term,input_term,
+                        set_y1,set_y2,set_y1_trans,set_y2_trans,
+                        all_pred_y1, all_pred_y2,
+                        all_pred_u1,
+                        all_pred_u2,
+                        all_pred_u3,
+                        all_pred_u4):
+    y1_pred_inverse_transform = scalers[output_term[0]].inverse_transform(np.array(all_pred_y1).reshape(-1, 1)).flatten()
+    y2_pred_inverse_transform = scalers[output_term[1]].inverse_transform(np.array(all_pred_y2).reshape(-1, 1)).flatten()
+    all_pred_u1_inverse_transform = scalers[input_term[0]].inverse_transform(np.array(all_pred_u1).reshape(-1, 1)).flatten()
+    all_pred_u2_inverse_transform = scalers[input_term[1]].inverse_transform(np.array(all_pred_u2).reshape(-1, 1)).flatten()
+    all_pred_u3_inverse_transform = scalers[input_term[2]].inverse_transform(np.array(all_pred_u3).reshape(-1, 1)).flatten()
+    all_pred_u4_inverse_transform = scalers[input_term[3]].inverse_transform(np.array(all_pred_u4).reshape(-1, 1)).flatten()
+    a1 = scalers[input_term[0]].inverse_transform(np.array([1,-1]).reshape(-1, 1)).flatten()
+    a2 = scalers[input_term[1]].inverse_transform(np.array([1,-1]).reshape(-1, 1)).flatten()
+    a3 = scalers[input_term[2]].inverse_transform(np.array([1,-1]).reshape(-1, 1)).flatten()
+    a4 = scalers[input_term[3]].inverse_transform(np.array([1,-1]).reshape(-1, 1)).flatten()
+    print(f'上线分别是：{a1}、{a2}、{a3}、{a4}')
+
+
+    rmse_1 = np.mean(np.fabs(set_y1-y1_pred_inverse_transform))
+    rmse_2 = np.mean(np.fabs(set_y2-y2_pred_inverse_transform))
+    print('平均误差',rmse_1.round(4))
+    print('平均误差',rmse_2.round(4))
+
+    # 模型预测控制结果可视化
+    # 创建两个子图，分别绘制每个维度
+    plt.figure(figsize=(14, 10))
+
+    # 第一个维度的曲线
+    plt.subplot(6, 2, 1)
+    plt.plot(set_y1_trans, 'ro-', label='set_y1')
+    plt.plot(all_pred_y1, 'bo-', label='y1')
+    plt.axvline(x=0, color='gray', linestyle='--', linewidth=1.5)
+    plt.xlim((0,Times))
+    plt.ylabel(output_term[0], fontproperties=font)  # 使用中文标签
+    plt.legend()
+    plt.grid(linestyle='--', alpha=0.7, color='gray')
+
+    # 第二个维度的曲线
+    plt.subplot(6, 2, 3)
+    plt.plot(set_y2_trans, 'ro-', label='set_y2')
+    plt.plot(all_pred_y2, 'bo-', label='y2')
+    plt.axvline(x=0, color='gray', linestyle='--', linewidth=1.5)
+    plt.xlim((0,Times))
+    plt.ylabel(output_term[1], fontproperties=font)  # 使用中文标签
+    plt.legend()
+    plt.grid(linestyle='--', alpha=0.7, color='gray')
+
+    # 第一个维度的u1曲线
+    plt.subplot(6, 2, 5)
     plt.plot(all_pred_u1, 'bo-', label='u1')
     plt.axvline(x=0, color='gray', linestyle='--', linewidth=1.5)
     plt.xlim((0,Times))
@@ -537,7 +841,7 @@ def data_tranform_plot(scalers,Times,max_control,
     plt.grid(linestyle='--', alpha=0.7, color='gray')
 
     # 第二个维度的u2曲线
-    plt.subplot(9, 2, 8)
+    plt.subplot(6, 2, 7)
     plt.plot(all_pred_u2, 'bo-', label='u2')
     plt.axvline(x=0, color='gray', linestyle='--', linewidth=1.5)
     plt.xlim((0,Times))
@@ -547,7 +851,7 @@ def data_tranform_plot(scalers,Times,max_control,
     plt.grid(linestyle='--', alpha=0.7, color='gray')
 
     # 第三个维度的u3曲线
-    plt.subplot(9, 2, 10)
+    plt.subplot(6, 2, 9)
     plt.plot(all_pred_u3, 'bo-', label='u3')  # 修改标签为 'u3'
     plt.axvline(x=0, color='gray', linestyle='--', linewidth=1.5)
     plt.xlim((0,Times))
@@ -557,7 +861,7 @@ def data_tranform_plot(scalers,Times,max_control,
     plt.grid(linestyle='--', alpha=0.7, color='gray')
 
     # 第四个维度的u4曲线
-    plt.subplot(9, 2, 12)
+    plt.subplot(6, 2, 11)
     plt.plot(all_pred_u4, 'bo-', label='u4')  # 修改标签为 'u4'
     plt.axvline(x=0, color='gray', linestyle='--', linewidth=1.5)
     plt.xlim((0,Times))
@@ -567,40 +871,79 @@ def data_tranform_plot(scalers,Times,max_control,
     plt.grid(linestyle='--', alpha=0.7, color='gray')
 
 
-    # 第二个维度的u5曲线
-    plt.subplot(9, 2, 14)
-    plt.plot(all_pred_u2, 'bo-', label='u2')
+
+
+    ######################################################
+
+    # 第一个维度的曲线
+    plt.subplot(6, 2, 2)
+    plt.plot(set_y1, 'ro-', label='set')
+    plt.plot(y1_pred_inverse_transform, 'bo-', label='y1')
     plt.axvline(x=0, color='gray', linestyle='--', linewidth=1.5)
     plt.xlim((0,Times))
-    plt.ylim((-max_control,max_control))
-    plt.ylabel(input_term[4], fontproperties=font)  # 使用中文标签
+    plt.ylabel(output_term[0], fontproperties=font)  # 使用中文标签
     plt.legend()
     plt.grid(linestyle='--', alpha=0.7, color='gray')
 
-    # 第三个维度的u6曲线
-    plt.subplot(9, 2, 16)
-    plt.plot(all_pred_u3, 'bo-', label='u3')  # 修改标签为 'u3'
+    # 第二个维度的曲线
+    plt.subplot(6, 2, 4)
+    plt.plot(set_y2, 'ro-', label='set')
+    plt.plot(y2_pred_inverse_transform, 'bo-', label='y2')
     plt.axvline(x=0, color='gray', linestyle='--', linewidth=1.5)
     plt.xlim((0,Times))
-    plt.ylim((-max_control,max_control))
-    plt.ylabel(input_term[5], fontproperties=font)  # 使用中文标签
+    plt.ylabel(output_term[1], fontproperties=font)  # 使用中文标签
     plt.legend()
     plt.grid(linestyle='--', alpha=0.7, color='gray')
 
-    # 第四个维度的u7曲线
-    plt.subplot(9, 2, 18)
-    plt.plot(all_pred_u4, 'bo-', label='u4')  # 修改标签为 'u4'
+    # 第一个维度的u1曲线
+    plt.subplot(6, 2, 6)
+    plt.plot(all_pred_u1_inverse_transform, 'bo-', label='u1')
     plt.axvline(x=0, color='gray', linestyle='--', linewidth=1.5)
     plt.xlim((0,Times))
-    plt.ylim((-max_control,max_control))
-    plt.ylabel(input_term[6], fontproperties=font)  # 使用中文标签
+    plt.ylim((a1[1],a1[0]))
+    plt.ylabel(input_term[0], fontproperties=font)  # 使用中文标签
     plt.legend()
     plt.grid(linestyle='--', alpha=0.7, color='gray')
+
+    # 第二个维度的u2曲线
+    plt.subplot(6, 2, 8)
+    plt.plot(all_pred_u2_inverse_transform, 'bo-', label='u2')
+    plt.axvline(x=0, color='gray', linestyle='--', linewidth=1.5)
+    plt.xlim((0,Times))
+    plt.ylim((a2[1],a2[0]))
+    plt.ylabel(input_term[1], fontproperties=font)  # 使用中文标签
+    plt.legend()
+    plt.grid(linestyle='--', alpha=0.7, color='gray')
+
+    # 第三个维度的u3曲线
+    plt.subplot(6, 2, 10)
+    plt.plot(all_pred_u3_inverse_transform, 'bo-', label='u3')  # 修改标签为 'u3'
+    plt.axvline(x=0, color='gray', linestyle='--', linewidth=1.5)
+    plt.xlim((0,Times))
+    plt.ylim((a3[1],a3[0]))
+    plt.ylabel(input_term[2], fontproperties=font)  # 使用中文标签
+    plt.legend()
+    plt.grid(linestyle='--', alpha=0.7, color='gray')
+
+    # 第四个维度的u4曲线
+    plt.subplot(6, 2, 12)
+    plt.plot(all_pred_u4_inverse_transform, 'bo-', label='u4')  # 修改标签为 'u4'
+    plt.axvline(x=0, color='gray', linestyle='--', linewidth=1.5)
+    plt.xlim((0,Times))
+    plt.ylim((a4[1],a4[0]))
+    plt.ylabel(input_term[3], fontproperties=font)  # 使用中文标签
+    plt.legend()
+    plt.grid(linestyle='--', alpha=0.7, color='gray')
+
+
+
 
 
     # 调整子图布局
     plt.tight_layout()
     plt.show()
+
+
 
 
 
