@@ -208,6 +208,7 @@ def double_control_train_test_result(scalers,output_term,
     plt.plot(y_test_0,'r')
     plt.plot(y_pred_0_inverse_transform,'g')
     plt.ylabel(output_term[0], fontproperties=font)  # 使用中文标签
+    plt.title("建模效果", fontproperties=font)
 
     plt.subplot(4, 2, 3)
     plt.plot(y_test_1,'r')
@@ -219,7 +220,7 @@ def double_control_train_test_result(scalers,output_term,
     plt.ylabel(output_term[0]+'_err', fontproperties=font)  # 使用中文标签
 
     plt.subplot(4, 2, 7)
-    plt.plot(output1,'g-')
+    plt.plot(output1,'r-')
     plt.ylabel(output_term[1]+'_err', fontproperties=font)  # 使用中文标签
 
 
@@ -260,9 +261,10 @@ def double_control_train_test_result(scalers,output_term,
     # print(f"误差分析1:平均值:{output1.std():.4f},方差:{output1.mean():.4f}")
 
     plt.subplot(4, 2, 2)
-    plt.plot(y_test_0,'r')
-    plt.plot(y_pred_0_inverse_transform,'g')
+    plt.plot(y_test_0,'r', label="real_data")
+    plt.plot(y_pred_0_inverse_transform,'g', label="predict_data")
     plt.ylabel(output_term[0], fontproperties=font)  # 使用中文标签
+    plt.title("预测效果", fontproperties=font)
 
     plt.subplot(4, 2, 4)
     plt.plot(y_test_1,'r')
@@ -274,7 +276,7 @@ def double_control_train_test_result(scalers,output_term,
     plt.ylabel(output_term[0]+'_err', fontproperties=font)  # 使用中文标签
 
     plt.subplot(4, 2, 8)
-    plt.plot(output1,'g-')
+    plt.plot(output1,'r-')
     plt.ylabel(output_term[1]+'_err', fontproperties=font)  # 使用中文标签
 
 
