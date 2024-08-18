@@ -65,6 +65,9 @@ class BLSRegressor(RVFLNRegressor):
             )
         self.input_features = X.shape[1]
         self.output_features = Y.shape[1]
+        
+        # 设置随机种子
+        np.random.seed(42)
         self.We = np.random.standard_normal(
             size=(self.n_z, X.shape[1], self.n_z_features)
         )
